@@ -1,35 +1,41 @@
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.io.File;
-import java.io.IOException;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Converter {
     private final static String basePath = "src/main/resources/";
 
-    public static void writeToNewJson () {
-        Env env = new Env();
-        LocalEnv localEnv = new LocalEnv();
-        ObjectMapper mapper = new ObjectMapper();
+    public static void writeToNewJson() throws IOException {
+        Gson gson = new Gson();
+        TypeToken typeToken = new TypeToken<Map<String, String>>() {};
+        String localEnv = new String(Files.readAllBytes(Paths.get(basePath + "local-env.json")), StandardCharsets.UTF_8);
+        String env = new String(Files.readAllBytes(Paths.get(basePath + "env.json")), StandardCharsets.UTF_8);
+        Pattern pat = Pattern.compile("\\$\\{[a-zA-Z0-9_.+-]*}");
 
-        try {
-            localEnv = mapper.readValue(new File(basePath + "local-env.json"), LocalEnv.class);
-            env = mapper.readValue(new File(basePath + "env.json"), Env.class);
+        Map<String, String> mapFull = gson.fromJson(localEnv, typeToken.getType());
+        mapFull.putAll(gson.fromJson(env, typeToken.getType()));
 
-            localEnv.setApplicationApiUrl(localEnv.getApplicationApiUrl().replaceAll("application.url" ,
-                    localEnv.getApplicationUrl()).replace("${", "").replace("}", ""));
+        for (String result : mapFull.keySet()) {
+            String tempValue = mapFull.get(result);
+            Matcher matcher = pat.matcher(tempValue);
 
-            env.setApiUsersBase(env.getApiUsersBase().replaceAll("application.api.url",
-                    localEnv.getApplicationApiUrl()).replace("${", "").replace("}", ""));
-
-            env.setApiUsersGetById(env.getApiUsersGetById().replaceAll("api.users.base",
-                    env.getApiUsersBase()).replaceFirst("\\$\\{", "").replaceFirst("}", ""));
-
-            mapper.writeValue(new File(basePath + "result-local-env.json" ), localEnv);
-            mapper.writeValue(new File(basePath + "result-env.json" ), env);
+            if (matcher.find()) {
+                String temp = matcher.group(0);
+                String keyForSearch = temp.replaceAll("\\$\\{", "").replaceFirst("}", "");
+                tempValue = tempValue.replaceFirst("\\$\\{[a-zA-Z0-9_.+-]*}", mapFull.get(keyForSearch));
+                mapFull.replace(result, tempValue);
+            }
         }
-        catch (IOException ex) {
-            ex.printStackTrace();
+        try (FileWriter writer = new FileWriter(basePath + "result.json")) {
+            writer.write(gson.toJson(mapFull));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-
     }
 }
