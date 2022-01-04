@@ -1,25 +1,38 @@
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Converter {
     private final static String basePath = "src/main/resources/";
+    private final static String regExp = "\\$\\{[a-zA-Z0-9_.+-]*}";
+
 
     public static void writeToNewJson() throws IOException {
-        Gson gson = new Gson();
-        TypeToken typeToken = new TypeToken<Map<String, String>>() {};
-        String localEnv = new String(Files.readAllBytes(Paths.get(basePath + "local-env.json")), StandardCharsets.UTF_8);
-        String env = new String(Files.readAllBytes(Paths.get(basePath + "env.json")), StandardCharsets.UTF_8);
-        Pattern pat = Pattern.compile("\\$\\{[a-zA-Z0-9_.+-]*}");
+        Pattern pat = Pattern.compile(regExp);
+        Map<String, String> mapFull = new LinkedHashMap<>();
+        File localEnv = new File(basePath + "local-env.json");
+        File env = new File(basePath + "env.json");
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode jsonNodeLocalEnv = mapper.readTree(localEnv);
+        JsonNode jsonNodeEnv = mapper.readTree(env);
+        ObjectWriter writer = mapper.writer(new DefaultPrettyPrinter());
 
-        Map<String, String> mapFull = gson.fromJson(localEnv, typeToken.getType());
-        mapFull.putAll(gson.fromJson(env, typeToken.getType()));
+        Iterator<Map.Entry<String, JsonNode>> fieldsLocalEnv = jsonNodeLocalEnv.fields();
+        Iterator<Map.Entry<String, JsonNode>> fieldsEnv = jsonNodeEnv.fields();
+
+        while(fieldsLocalEnv.hasNext()) {
+            Map.Entry<String, JsonNode> fieldLocalEnv = fieldsLocalEnv.next();
+            mapFull.put(fieldLocalEnv.getKey(), fieldLocalEnv.getValue().asText());
+        }
+        while(fieldsEnv.hasNext()) {
+            Map.Entry<String, JsonNode> field = fieldsEnv.next();
+            mapFull.put(field.getKey(), field.getValue().asText());
+        }
 
         for (String result : mapFull.keySet()) {
             String tempValue = mapFull.get(result);
@@ -31,19 +44,12 @@ public class Converter {
 
                 if (mapFull.containsKey(keyForSearch) && !mapFull.get(keyForSearch).contains("${"))
                 {
-                    tempValue = tempValue.replaceFirst("\\$\\{[a-zA-Z0-9_.+-]*}", mapFull.get(keyForSearch));
+                    tempValue = tempValue.replaceFirst(regExp, mapFull.get(keyForSearch));
                     mapFull.replace(result, tempValue);
-                }
-                else {
-                    tempValue = tempValue.replaceFirst("\\$\\{[a-zA-Z0-9_.+-]*}", "not found");
                 }
             }
 
         }
-        try (FileWriter writer = new FileWriter(basePath + "result.json")) {
-            writer.write(gson.toJson(mapFull));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writer.writeValue(new File(basePath + "result.json"), mapFull);
     }
 }
