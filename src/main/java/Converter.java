@@ -28,9 +28,13 @@ public class Converter {
             if (matcher.find()) {
                 String temp = matcher.group(0);
                 String keyForSearch = temp.replaceAll("\\$\\{", "").replaceFirst("}", "");
-                tempValue = tempValue.replaceFirst("\\$\\{[a-zA-Z0-9_.+-]*}", mapFull.get(keyForSearch));
-                mapFull.replace(result, tempValue);
+
+                if (mapFull.containsKey(keyForSearch)) {
+                    tempValue = tempValue.replaceFirst("\\$\\{[a-zA-Z0-9_.+-]*}", mapFull.get(keyForSearch));
+                    mapFull.replace(result, tempValue);
+                }
             }
+
         }
         try (FileWriter writer = new FileWriter(basePath + "result.json")) {
             writer.write(gson.toJson(mapFull));
