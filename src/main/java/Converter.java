@@ -29,9 +29,13 @@ public class Converter {
                 String temp = matcher.group(0);
                 String keyForSearch = temp.replaceAll("\\$\\{", "").replaceFirst("}", "");
 
-                if (mapFull.containsKey(keyForSearch)) {
+                if (mapFull.containsKey(keyForSearch) && !mapFull.get(keyForSearch).contains("${"))
+                {
                     tempValue = tempValue.replaceFirst("\\$\\{[a-zA-Z0-9_.+-]*}", mapFull.get(keyForSearch));
                     mapFull.replace(result, tempValue);
+                }
+                else {
+                    tempValue = tempValue.replaceFirst("\\$\\{[a-zA-Z0-9_.+-]*}", "not found");
                 }
             }
 
